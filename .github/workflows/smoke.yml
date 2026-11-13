@@ -1,0 +1,26 @@
+name: Manual AI smoke test
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: AI provider (one full scan consumes 3 Sekirei credits).
+        type: choice
+        options: [claude, codex]
+        default: claude
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./
+        with:
+          api-key: ${{ secrets.SEKIREI_API_KEY }}
+          scan-type: full
+          agent: ${{ inputs.agent }}
+          ai-api-key: ${{ inputs.agent == 'claude' && secrets.ANTHROPIC_API_KEY || secrets.OPENAI_API_KEY }}

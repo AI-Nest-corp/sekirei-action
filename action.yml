@@ -1,0 +1,105 @@
+name: Sekirei security review
+description: Review repository code using a skill distributed by Sekirei and your AI provider key.
+branding:
+  icon: shield
+  color: blue
+inputs:
+  api-url:
+    description: Sekirei API origin (override only for development).
+    default: https://sekirei-backend.tech-div.workers.dev
+  api-key:
+    description: Sekirei API key.
+    required: true
+  scan-type:
+    description: diff (pull requests) or full.
+    required: true
+  agent:
+    description: claude or codex.
+    required: true
+  ai-api-key:
+    description: API key for the selected AI provider.
+    required: true
+  github-token:
+    description: Token for PR comments.
+    default: ${{ github.token }}
+  model:
+    description: Optional model override; otherwise use the pinned CLI default.
+  timeout-minutes:
+    description: AI execution timeout (1–60 minutes).
+    default: "10"
+outputs:
+  execution-id:
+    description: Sekirei distribution ID.
+    value: ${{ steps.prepare.outputs.execution-id }}
+  report-path:
+    description: Directory containing validated Markdown and JSON reports.
+    value: ${{ steps.prepare.outputs.report-path }}
+  findings-count:
+    description: Number of findings, empty when analysis failed before validation.
+    value: ${{ steps.finalize.outputs.findings-count || steps.prepare.outputs.findings-count }}
+  status:
+    description: completed, skipped, or failed (including incomplete analysis).
+    value: ${{ steps.upload.outcome == 'failure' && 'failed' || steps.finalize.outputs.status || steps.prepare.outputs.status }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: "24"
+        package-manager-cache: false
+    - name: Prepare scan and acquire skill
+      id: prepare
+      shell: bash
+      env:
+        SEKIREI_ACTION_PATH: ${{ github.action_path }}
+        INPUT_API-URL: ${{ inputs.api-url }}
+        INPUT_API-KEY: ${{ inputs.api-key }}
+        INPUT_SCAN-TYPE: ${{ inputs.scan-type }}
+        INPUT_AGENT: ${{ inputs.agent }}
+        INPUT_AI-API-KEY: ${{ inputs.ai-api-key }}
+        INPUT_GITHUB-TOKEN: ${{ inputs.github-token }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_TIMEOUT-MINUTES: ${{ inputs.timeout-minutes }}
+      run: node "$SEKIREI_ACTION_PATH/dist/main.cjs" prepare
+    - name: Install selected official CLI
+      if: steps.prepare.outputs.ready == 'true'
+      shell: bash
+      env:
+        SEKIREI_ACTION_PATH: ${{ github.action_path }}
+        SEKIREI_STATE_DIR: ${{ steps.prepare.outputs.state-dir }}
+      run: node "$SEKIREI_ACTION_PATH/dist/main.cjs" install
+    - name: Run security review
+      id: agent
+      if: steps.prepare.outputs.ready == 'true'
+      shell: bash
+      env:
+        SEKIREI_ACTION_PATH: ${{ github.action_path }}
+        SEKIREI_STATE_DIR: ${{ steps.prepare.outputs.state-dir }}
+        INPUT_AI-API-KEY: ${{ inputs.ai-api-key }}
+      run: node "$SEKIREI_ACTION_PATH/dist/main.cjs" run
+    - name: Validate and publish report
+      id: finalize
+      if: always() && steps.prepare.outputs.ready == 'true'
+      shell: bash
+      env:
+        SEKIREI_ACTION_PATH: ${{ github.action_path }}
+        SEKIREI_STATE_DIR: ${{ steps.prepare.outputs.state-dir }}
+        SEKIREI_AGENT_OUTCOME: ${{ steps.agent.outcome }}
+        INPUT_GITHUB-TOKEN: ${{ inputs.github-token }}
+      run: node "$SEKIREI_ACTION_PATH/dist/main.cjs" finalize
+    - name: Upload validated reports
+      id: upload
+      if: always() && steps.prepare.outputs.ready == 'true'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: ${{ steps.prepare.outputs.artifact-name }}
+        path: ${{ steps.prepare.outputs.report-path }}
+        if-no-files-found: ignore
+        retention-days: 7
+    - name: Remove private scan files
+      if: always() && steps.prepare.outputs.state-dir != ''
+      shell: bash
+      env:
+        SEKIREI_ACTION_PATH: ${{ github.action_path }}
+        SEKIREI_STATE_DIR: ${{ steps.prepare.outputs.state-dir }}
+      run: node "$SEKIREI_ACTION_PATH/dist/main.cjs" cleanup

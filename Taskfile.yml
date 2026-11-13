@@ -1,0 +1,8 @@
+version: "3"
+tasks:
+  check:
+    cmd: npm run check
+  build:
+    cmd: npm run build
+  test:
+    cmd: npm test

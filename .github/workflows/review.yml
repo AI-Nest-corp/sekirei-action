@@ -1,0 +1,24 @@
+name: Manual PR security review
+on:
+  pull_request:
+    types: [labeled]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  review:
+    if: github.event.label.name == 'sekirei-review' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./
+        with:
+          api-key: ${{ secrets.SEKIREI_API_KEY }}
+          scan-type: diff
+          agent: claude
+          ai-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

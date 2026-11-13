@@ -1,0 +1,61 @@
+import { z } from "zod";
+import type { State } from "../types.js";
+
+const text = z.string().max(6000);
+export const reportSchema = z.strictObject({
+  review_status: z.enum(["complete", "incomplete"]),
+  summary: text,
+  unreviewed: z.array(text).max(200),
+  findings: z.array(z.strictObject({
+    severity: z.enum(["Critical", "High", "Medium", "Low"]),
+    title: z.string().min(1).max(200), file: z.string().min(1).max(1000), line: z.number().int().min(1),
+    evidence: text, impact: text, remediation: text, verification: text,
+    asvs: z.string().regex(/^V\d+\.\d+\.\d+$/).nullable(),
+  })).max(50),
+});
+export const jsonSchema = z.toJSONSchema(reportSchema, { target: "draft-7" });
+export function validateReport(raw: unknown, state: State, skill: string) {
+  const result = reportSchema.safeParse(raw);
+  if (!result.success) throw new Error("AI output does not match the report format.");
+  const report = result.data;
+  const serialized = JSON.stringify(report);
+  if (skill.split("\n").some((line) => line.trim().length >= 24 && serialized.includes(line.trim())))
+    throw new Error("AI output contains skill instructions; report withheld.");
+  for (const finding of report.findings) {
+    const file = state.scope.files.find((file) => file.path === finding.file);
+    if (!file || finding.line > file.lines) throw new Error("AI finding references a location outside the supplied source.");
+  }
+  // Never allow a model to claim complete coverage after the caller omitted eligible files.
+  const omitted = state.scope.omitted.filter((entry) => !entry.reason.startsWith("excluded-"));
+  if (omitted.length || report.unreviewed.length) report.review_status = "incomplete";
+  return report;
+}
+export function redact(text: string): string {
+  return text
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|skr_[A-Za-z0-9_-]{16,})\b/g, "[REDACTED]")
+    .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, "[REDACTED PRIVATE KEY]");
+}
+const escape = (s: string) => redact(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/@/g, "&#64;").replace(/[\\`*_\[\]{}()|#!]/g, "\\$&");
+export function markdown(state: State, report: z.infer<typeof reportSchema>): string {
+  const parts = ["# Sekirei security review", "", `対象: ${escape(state.repository.full_path)} · ${state.scope.commit} · ${state.scope.scanType}`,
+    `解析状態: ${report.review_status === "complete" ? "完了（記載した範囲）" : "一部完了"}`, `配布ID: ${state.executionId}`, "", escape(report.summary), "", "## 指摘一覧", ""];
+  if (!report.findings.length) parts.push("確認した範囲では、対応が必要な指摘はありません。");
+  else {
+    parts.push("| ID | 重要度 | 問題 | 対象 |", "| --- | --- | --- | --- |");
+    report.findings.forEach((f, i) => parts.push(`| F-${String(i + 1).padStart(3, "0")} | ${f.severity} | ${escape(f.title).replace(/\n/g, " ")} | ${escape(f.file)}:${f.line} |`));
+    report.findings.forEach((f, i) => parts.push("", `## F-${String(i + 1).padStart(3, "0")}: ${escape(f.title)}`, "",
+      `- 問題と根拠: ${escape(f.evidence)}`, `- 影響: ${escape(f.impact)}`, `- 修正案: ${escape(f.remediation)}`,
+      `- 確認方法（未実施）: ${escape(f.verification)}`, `- 関連基準: ${f.asvs ? `[ASVS 5.0.0 ${f.asvs}](https://github.com/OWASP/ASVS/tree/v5.0.0/5.0/en)` : "未特定"}`));
+  }
+  parts.push("", "## 未確認・除外した範囲", "", ...report.unreviewed.map((x) => `- ${escape(x)}`),
+    ...state.scope.omitted.map((x) => `- ${escape(x.path)}: ${x.reason}`),
+    "", "静的レビューの結果です。実行による検証やASVSへの適合を保証するものではありません。", "");
+  return parts.join("\n");
+}
+export function commentBody(markdown: string): string {
+  const marker = "<!-- sekirei-security-review -->\n";
+  const limit = 55_000;
+  if (Buffer.byteLength(markdown) <= limit) return marker + markdown;
+  const truncated = new TextDecoder("utf-8", { fatal: false }).decode(Buffer.from(markdown).subarray(0, limit)).replace(/\uFFFD$/, "");
+  return marker + truncated + "\n\n※ 長文のため省略しました。完全なレポートはこの実行のSekirei artifactを確認してください。";
+}

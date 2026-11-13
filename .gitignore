@@ -1,0 +1,10 @@
+node_modules/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+MVP.md
+
+# dist/ is committed so callers do not need to build the Action.
