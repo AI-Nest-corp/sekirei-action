@@ -1,7 +1,5 @@
 # Sekirei Action
 
-Claude Code / CodexでコードをセキュリティレビューするGitHub Actionです。
-
 ## 使い方
 
 リポジトリのSecretsに`SEKIREI_API_KEY`と`ANTHROPIC_API_KEY`を登録し、`.github/workflows/security-review.yml`に以下を追加します。
@@ -36,15 +34,6 @@ jobs:
 ```
 
 PRの差分をレビューし、結果をPRコメントとActionsのSummaryに表示します。Markdown / JSONのレポートもartifactから取得できます。
-
-## Codexを使う場合
-
-`OPENAI_API_KEY`をSecretsに登録し、次の2項目を変更します。
-
-```yaml
-agent: codex
-ai-api-key: ${{ secrets.OPENAI_API_KEY }}
-```
 
 ## フルスキャン
 

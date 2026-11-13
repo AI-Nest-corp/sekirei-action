@@ -1,5 +1,5 @@
 name: Sekirei security review
-description: Review repository code using a skill distributed by Sekirei and your AI provider key.
+description: Review repository code for security issues.
 branding:
   icon: shield
   color: blue
@@ -47,7 +47,7 @@ runs:
       with:
         node-version: "24"
         package-manager-cache: false
-    - name: Prepare scan and acquire skill
+    - name: Prepare scan
       id: prepare
       shell: bash
       env:
