@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { commentBody, markdown, redact, validateReport } from "../src/report/index.js";
+import { commentBody, incompleteMessage, markdown, redact, validateReport } from "../src/report/index.js";
 import type { State } from "../src/types.js";
 const state: State = { agent: "claude", model: "", timeout: 10, repository: { provider: "github", host: "github.com", id: "1", full_path: "owner/repo" }, pr: 1,
   executionId: "test", skillVersion: "v1", skillHash: "hash", scope: { scanType: "diff", commit: "a".repeat(40), base: "b".repeat(40), targets: ["x.ts"], omitted: [], files: [{ path: "x.ts", lines: 10, content: "test", patch: "test" }] } };
-const report = () => ({ review_status: "complete", summary: "Summary", unreviewed: [], findings: [{ severity: "High", title: "<img src=x> @everyone", file: "x.ts", line: 2, evidence: "Input reaches SQL", impact: "Data disclosure", remediation: "Bind parameters", verification: "Check bad input", asvs: null }] });
+const report = () => ({ summary: "Summary", unreviewed: [], limitations: [], findings: [{ severity: "High", title: "<img src=x> @everyone", file: "x.ts", line: 2, evidence: "Input reaches SQL", impact: "Data disclosure", remediation: "Bind parameters", verification: "Check bad input", asvs: null }] });
 test("validates locations and escapes Markdown/HTML/mentions", () => {
   const result = validateReport(report(), state, "private instructions");
   const md = markdown(state, result);
@@ -14,8 +14,21 @@ test("validates locations and escapes Markdown/HTML/mentions", () => {
   assert.throws(() => validateReport({ ...report(), findings: [{ ...report().findings[0], line: 99 }] }, state, ""), /outside/);
 });
 test("missing coverage cannot be represented as complete", () => {
-  const limited = { ...state, scope: { ...state.scope, omitted: [{ path: "huge.ts", reason: "file-size-limit" }] } };
+  const limited = { ...state, scope: { ...state.scope, targets: ["x.ts", "huge.ts"], omitted: [{ path: "huge.ts", reason: "file-size-limit" }] } };
   assert.equal(validateReport(report(), limited, "").review_status, "incomplete");
+  assert.match(incompleteMessage(limited, validateReport(report(), limited, "")), /huge.ts: file-size-limit/);
+});
+test("expected exclusions and external configuration do not fail a completed static review", () => {
+  const excluded = { ...state, scope: { ...state.scope, omitted: [{ path: "dist/main.cjs", reason: "excluded-generated-or-dependency" }, { path: "context.ts", reason: "file-size-limit" }] } };
+  const result = validateReport({ ...report(), limitations: ["dist/main.cjs is generated", "External deployment settings were not supplied"] }, excluded, "");
+  assert.equal(result.review_status, "complete");
+  assert.ok(markdown(excluded, result).includes("External deployment"));
+});
+test("unread supplied source produces a specific actionable error", () => {
+  const result = validateReport({ ...report(), unreviewed: [{ file: "x.ts", reason: "Time limit reached before reviewing this file" }] }, state, "");
+  assert.equal(result.review_status, "incomplete");
+  assert.match(incompleteMessage(state, result), /x.ts: Time limit/);
+  assert.throws(() => validateReport({ ...report(), unreviewed: [{ file: "external settings", reason: "Unknown" }] }, state, ""), /Exclusions belong/);
 });
 test("withholds instructions and redacts credential values", () => {
   const skill = "Private review instructions that must never be published.";
