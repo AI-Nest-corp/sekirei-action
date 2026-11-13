@@ -19,8 +19,12 @@ export function validateReport(raw: unknown, state: State, skill: string) {
   if (!result.success) throw new Error("AI output does not match the report format.");
   const report = result.data;
   const serialized = JSON.stringify(report);
-  if (skill.split("\n").some((line) => line.trim().length >= 24 && serialized.includes(line.trim())))
-    throw new Error("AI output contains skill instructions; report withheld.");
+  // Output examples and shared headings are expected to recur in a report.
+  // Only reject the complete skill or actual prose instructions before the template.
+  const instructionLines = skill.split(/^## 出力形式/m)[0].split("\n");
+  const leaked = instructionLines.findIndex((line) => line.startsWith("- ") && line.length >= 40 && serialized.includes(line.trim()));
+  if ((skill.trim().length >= 24 && serialized.includes(skill.trim())) || leaked >= 0)
+    throw new Error(`AI output contains skill instructions; report withheld (instruction ${leaked + 1}).`);
   for (const finding of report.findings) {
     const file = state.scope.files.find((file) => file.path === finding.file);
     if (!file || finding.line > file.lines) throw new Error("AI finding references a location outside the supplied source.");
