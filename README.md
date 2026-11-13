@@ -38,7 +38,7 @@ Codexは`agent: codex`、`ai-api-key: ${{ secrets.OPENAI_API_KEY }}`に変更し
 
 イベントを`workflow_dispatch`、`scan-type`を`full`に変更し、checkoutの`ref`とPR用の`if`を外します。PR書き込み権限は不要です。
 
-diffはmerge-baseからPR headまでの変更と周辺ファイルを確認し、PRコメントへ出力します。fullはcheckoutしたコミットの追跡ファイルを確認します。どちらも検証済みの`report.md`と`report.json`をartifactに7日間保存します。
+diffはmerge-baseからPR headまでの変更と周辺ファイルを確認し、PRコメントへ出力します。fullはcheckoutしたコミットの追跡ファイルを確認します。どちらもジョブのSummaryに件数・重要度別の内訳・指摘一覧と修正案を表示し、根拠・影響・確認方法は折りたたみます。検証済みの`report.md`と`report.json`をartifactに7日間保存します。除外情報などの詳細はJSONに残します。
 
 ## 入力
 

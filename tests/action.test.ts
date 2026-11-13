@@ -12,6 +12,7 @@ test("Action pins dependencies, always cleans up, and scopes credentials", () =>
   assert.equal(run.env["INPUT_GITHUB-TOKEN"], undefined);
   assert.match(action.runs.steps.at(-1).if, /always\(\)/);
   assert.deepEqual(Object.keys(parse(readFileSync(".github/workflows/smoke.yml", "utf8")).on), ["workflow_dispatch"]);
+  assert.ok(!readFileSync("src/main.ts", "utf8").includes("core.setSecret(result.skill.content)"));
 });
 test("provider CLI flags disable command execution and custom project settings", () => {
   const claude = command("claude", "/tmp/test", "");

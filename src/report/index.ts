@@ -52,23 +52,31 @@ export function redact(text: string): string {
     .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|skr_[A-Za-z0-9_-]{16,})\b/g, "[REDACTED]")
     .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, "[REDACTED PRIVATE KEY]");
 }
-const escape = (s: string) => redact(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/@/g, "&#64;").replace(/[\\`*_\[\]{}()|#!]/g, "\\$&");
+const escape = (s: string) => redact(s)
+  .replace(/[\\`*_\[\]|]/g, "\\$&")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/@/g, "@\u200b");
+const cell = (s: string) => escape(s).replace(/[\r\n]+/g, " ");
 export function markdown(state: State, report: ReturnType<typeof validateReport>): string {
-  const parts = ["# Sekirei security review", "", `対象: ${escape(state.repository.full_path)} · ${state.scope.commit} · ${state.scope.scanType}`,
-    `解析状態: ${report.review_status === "complete" ? "完了（記載した範囲）" : "一部完了"}`, `配布ID: ${state.executionId}`, "", escape(report.summary), "", "## 指摘一覧", ""];
-  if (!report.findings.length) parts.push("確認した範囲では、対応が必要な指摘はありません。");
-  else {
-    parts.push("| ID | 重要度 | 問題 | 対象 |", "| --- | --- | --- | --- |");
-    report.findings.forEach((f, i) => parts.push(`| F-${String(i + 1).padStart(3, "0")} | ${f.severity} | ${escape(f.title).replace(/\n/g, " ")} | ${escape(f.file)}:${f.line} |`));
-    report.findings.forEach((f, i) => parts.push("", `## F-${String(i + 1).padStart(3, "0")}: ${escape(f.title)}`, "",
-      `- 問題と根拠: ${escape(f.evidence)}`, `- 影響: ${escape(f.impact)}`, `- 修正案: ${escape(f.remediation)}`,
-      `- 確認方法（未実施）: ${escape(f.verification)}`, `- 関連基準: ${f.asvs ? `[ASVS 5.0.0 ${f.asvs}](https://github.com/OWASP/ASVS/tree/v5.0.0/5.0/en)` : "未特定"}`));
+  const severities = ["Critical", "High", "Medium", "Low"] as const;
+  const counts = severities.map((severity) => `${severity}: ${report.findings.filter((f) => f.severity === severity).length}件`);
+  const parts = ["# Sekirei security review", "",
+    `**脆弱性 ${report.findings.length}件**（${counts.join(" / ")}）`, "",
+    `- 対象: ${cell(state.repository.full_path)} · ${state.scope.scanType} · ${state.scope.commit.slice(0, 7)}`,
+    `- 解析状態: ${report.review_status === "complete" ? "完了" : "一部完了"}`];
+  if (report.findings.length) {
+    parts.push("", "## 指摘一覧", "", "| ID | 重要度 | 問題 | 対象 |", "| --- | --- | --- | --- |");
+    report.findings.forEach((f, i) => parts.push(`| F-${String(i + 1).padStart(3, "0")} | ${f.severity} | ${cell(f.title)} | ${cell(f.file)}:${f.line} |`));
+    report.findings.forEach((f, i) => parts.push("", `## F-${String(i + 1).padStart(3, "0")}: ${cell(f.title)}`, "",
+      `**修正案:** ${escape(f.remediation)}`, "",
+      "<details>", "<summary>根拠・影響・確認方法</summary>", "",
+      `- 問題と根拠: ${escape(f.evidence)}`, `- 影響: ${escape(f.impact)}`,
+      `- 確認方法: ${escape(f.verification)}`, `- 関連基準: ${f.asvs ? `[ASVS 5.0.0 ${f.asvs}](https://github.com/OWASP/ASVS/tree/v5.0.0/5.0/en)` : "未特定"}`,
+      "", "</details>"));
   }
-  parts.push("", "## 未確認の対象コード", "", ...(report.unreviewed.length ? report.unreviewed.map((x) => `- ${escape(x.file)}: ${escape(x.reason)}`) : ["なし"]),
-    "", "## 確認範囲の制約・除外", "", ...report.limitations.map((x) => `- ${escape(x)}`),
-    ...state.scope.omitted.map((x) => `- ${escape(x.path)}: ${x.reason}`),
-    "", "静的レビューの結果です。実行による検証やASVSへの適合を保証するものではありません。", "");
-  return parts.join("\n");
+  const unread = incompleteReasons(state, report);
+  if (unread.length) parts.push("", "## 未確認の対象コード", "", ...unread.map((reason) => `- ${cell(reason)}`));
+  return parts.join("\n") + "\n";
 }
 export function commentBody(markdown: string): string {
   const marker = "<!-- sekirei-security-review -->\n";
