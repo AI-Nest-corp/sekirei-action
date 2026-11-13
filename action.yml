@@ -96,7 +96,7 @@ runs:
         path: ${{ steps.prepare.outputs.report-path }}
         if-no-files-found: ignore
         retention-days: 7
-    - name: Remove private scan files
+    - name: Clean up
       if: always() && steps.prepare.outputs.state-dir != ''
       shell: bash
       env:
