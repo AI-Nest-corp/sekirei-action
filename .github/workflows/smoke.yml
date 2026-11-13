@@ -1,4 +1,5 @@
-name: Manual AI smoke test
+name: Full Scan
+run-name: Full Scan
 on:
   workflow_dispatch:
     inputs:

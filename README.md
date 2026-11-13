@@ -69,8 +69,8 @@ diffはmerge-baseからPR headまでの変更と周辺ファイルを確認し�
 
 通常のpush／PRは、Secrets不要の型チェック・テスト・ビルドだけを実行します。
 
-- **Manual AI smoke test**：Actions画面から手動実行。自身のリポジトリをfullスキャン（3クレジット）。
-- **Manual PR security review**：同一リポジトリのPRに`sekirei-review`ラベルを付けたときだけdiffスキャン（1クレジット）。PRを更新するだけでは再実行しません。
+- **Full Scan**：Actions画面から手動実行。自身のリポジトリをfullスキャン（3クレジット）。
+- **Diff Scan**：同一リポジトリのPRに`sekirei-review`ラベルを付けたときだけdiffスキャン（1クレジット）。PRを更新するだけでは再実行しません。
 
 ```sh
 npm ci --ignore-scripts
