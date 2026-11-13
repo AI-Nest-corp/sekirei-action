@@ -37,4 +37,32 @@ PRの差分をレビューし、結果をPRコメントとActionsのSummaryに�
 
 ## フルスキャン
 
-上の例でイベントを`workflow_dispatch`、`scan-type`を`full`に変更し、ジョブの`if`とcheckoutの`ref`を削除します。`pull-requests: write`は不要です。結果はActionsのSummaryで確認できます。
+`.github/workflows/security-review-full.yml`に以下を追加し、Actions画面から手動実行します。
+
+```yaml
+name: Full Scan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: AI-Nest-corp/sekirei-action@v1
+        with:
+          api-key: ${{ secrets.SEKIREI_API_KEY }}
+          scan-type: full
+          agent: claude
+          ai-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+結果はActionsのSummaryで確認できます。
