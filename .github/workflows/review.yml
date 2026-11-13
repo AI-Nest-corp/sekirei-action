@@ -1,4 +1,5 @@
-name: Manual PR security review
+name: Diff Scan
+run-name: Diff Scan
 on:
   pull_request:
     types: [labeled]

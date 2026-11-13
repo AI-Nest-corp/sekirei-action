@@ -53,7 +53,7 @@ diffはmerge-baseからPR headまでの変更と周辺ファイルを確認し�
 | `timeout-minutes` | AI実行時間。既定10分、1–60分 |
 | `api-url` | 開発時のみ上書きするHTTPS origin。既定はSekirei本番 |
 
-出力は`execution-id`、`report-path`、`findings-count`、`status`（`completed` / `skipped` / `failed`）。指摘が見つかっただけでは失敗にしません。解析が不完全な場合はレポートを残して失敗にします。
+出力は`execution-id`、`report-path`、`findings-count`、`status`（`completed` / `skipped` / `failed`）。指摘が見つかっただけでは失敗にしません。対象コードを読み切れなかった場合はファイル名・理由をエラーとジョブのSummaryに表示し、レポートを残して失敗にします。生成物の除外やリポジトリ外の設定は確認範囲の制約として記録し、それだけでは失敗にしません。
 
 ## 実行範囲
 
@@ -69,8 +69,8 @@ diffはmerge-baseからPR headまでの変更と周辺ファイルを確認し�
 
 通常のpush／PRは、Secrets不要の型チェック・テスト・ビルドだけを実行します。
 
-- **Manual AI smoke test**：Actions画面から手動実行。自身のリポジトリをfullスキャン（3クレジット）。
-- **Manual PR security review**：同一リポジトリのPRに`sekirei-review`ラベルを付けたときだけdiffスキャン（1クレジット）。PRを更新するだけでは再実行しません。
+- **Full Scan**：Actions画面から手動実行。自身のリポジトリをfullスキャン（3クレジット）。
+- **Diff Scan**：同一リポジトリのPRに`sekirei-review`ラベルを付けたときだけdiffスキャン（1クレジット）。PRを更新するだけでは再実行しません。
 
 ```sh
 npm ci --ignore-scripts
